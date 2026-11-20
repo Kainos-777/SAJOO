@@ -413,6 +413,20 @@ body.st-open{overflow:hidden}
 .faq h3{font:900 24px var(--serif);margin:4px 0 14px}
 .faq .rd summary{font-size:15.5px}
 .faq .rdb p{font-size:14.5px}
+
+.pro-orr{width:min(56vw,230px)}
+.pro-orr .orr-ring{animation-duration:30s}.pro-orr .r2{animation-duration:22s}.pro-orr .r3{animation-duration:6s}
+.peek{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+.peek>div{display:grid;justify-items:center;gap:4px;padding:16px 4px 12px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid var(--line2);animation:flip .8s var(--d) cubic-bezier(.2,.9,.3,1) both}
+.peek b{font:900 34px/1 var(--serif);color:var(--c)}.peek span{font-size:12.5px;color:var(--fg2)}
+@keyframes flip{from{opacity:0;transform:perspective(400px) rotateY(80deg)}}
+.story.ui .st-z{pointer-events:none}.story.ui .st-stage{pointer-events:auto}
+.wiz{display:grid;gap:16px;width:100%;text-align:left;margin-top:4px}
+.wiz .field{margin:0}
+.wiz .adv{margin:0}.wiz .adv summary{color:var(--fg2)}
+.wnav{display:flex;gap:8px;justify-content:center;width:100%;margin-top:4px}
+.wnav .btn{flex:1;max-width:220px}
+.story .chk span{color:var(--fg2)}
 </style>
 
 <div class="wrap">
@@ -431,6 +445,7 @@ body.st-open{overflow:hidden}
             <p class="eyebrow">사주 · 주역 · 궁합</p>
             <h1>태어난 순간의 하늘을<br><em>한 장의 거울</em>에 비춥니다</h1>
             <p class="sub">절기를 천문 계산으로 헤아려 사주 여덟 글자를 세우고, 오행과 십성, 대운의 흐름까지 풀어 드립니다.</p>
+            <button type="button" class="btn ghost sm" id="open-pro">▶ 하늘 이야기로 시작하기</button>
             <div class="trust"><span>절기 천문 계산</span><span>진태양시 보정</span><span>음력·윤달</span><span>과거 표준시 반영</span></div>
           </div>
         </div>
@@ -480,6 +495,7 @@ body.st-open{overflow:hidden}
 
 <nav class="dock" aria-label="메뉴"><a href="#saju" data-v="saju"><b>命</b>사주</a><a href="#yi" data-v="yi"><b>易</b>주역</a><a href="#match" data-v="match"><b>緣</b>궁합</a></nav>
 <div class="calc" id="calc" hidden aria-live="polite"><div class="calc-in"><div class="orrery" id="orr-calc"></div><p id="calc-msg"></p><div class="pbar"><i id="calc-bar"></i></div></div></div>
+<div id="f-wiz" hidden></div>
 <div class="story" id="story" hidden role="dialog" aria-label="사주 이야기">
   <canvas id="st-fx" aria-hidden="true"></canvas>
   <div class="st-prog" id="st-prog"></div>
@@ -917,9 +933,11 @@ function formHTML(p,title){
   </details>`;
 }
 function initForm(p){
-  const q=s=>document.getElementById(p+'-'+s);
-  const radio=n=>(document.querySelector(`input[name="${p}-${n}"]:checked`)||{}).value;
-  const setRadio=(n,v)=>{const el=document.querySelector(`input[name="${p}-${n}"][value="${v}"]`);if(el)el.checked=true;};
+  const cache={};['name','y','m','d','t','unk','leap','leapw','sc'].forEach(k=>{cache[k]=document.getElementById(p+'-'+k);});
+  const q=s=>cache[s];
+  const radios=[...document.querySelectorAll(`input[type=radio][name^="${p}-"]`)];
+  const radio=n=>(radios.find(e=>e.name===p+'-'+n&&e.checked)||{}).value;
+  const setRadio=(n,v)=>{const el=radios.find(e=>e.name===p+'-'+n&&e.value===v);if(el)el.checked=true;};
   function days(){
     const lunar=radio('c')==='lunar',y=+q('y').value,m=+q('m').value;
     const n=lunar?30:daysInSolar(y,m);const cur=+q('d').value||1;
@@ -930,7 +948,7 @@ function initForm(p){
   }
   q('y').value=1990;q('m').value=1;days();
   ['y','m'].forEach(k=>q(k).addEventListener('change',days));
-  document.querySelectorAll(`input[name="${p}-c"]`).forEach(e=>e.addEventListener('change',()=>{
+  radios.filter(e=>e.name===p+'-c').forEach(e=>e.addEventListener('change',()=>{
     if(radio('c')==='lunar'&&!lunarOK()){setRadio('c','solar');toast('이 브라우저는 음력 변환을 지원하지 않아요. 양력으로 입력해 주세요.');}
     days();}));
   q('unk').addEventListener('change',()=>{q('t').disabled=q('unk').checked;});
@@ -1089,7 +1107,14 @@ function buildReading(ch,an,lk,ctx){
 }
 
 /* ---------- 결과 렌더 ---------- */
-let CUR=null;
+let CUR=null,FORMS=null;
+async function runReading(inp){
+  try{computeChart(inp);}catch(e){toast(e.message);return false;}
+  store.set('mg.form',inp);
+  await cinematic(['태어난 해의 입춘을 헤아립니다','절기의 순간을 계산합니다','일진의 간지를 찾습니다','여덟 글자를 펼칩니다']);
+  try{render(inp);}catch(e){toast(e.message||'계산 중 문제가 생겼어요.');console.error(e);return false;}
+  scrollTo({top:0});playStory(CUR);return true;
+}
 function render(inp){
   const ch=computeChart(inp);const an=analyze(ch);const lk=computeLuck(ch,an);
   const now=Date.now();const ny=yearPillarOf(now).y;
@@ -1303,20 +1328,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   stars($('#stars'));
   $('#f-main').innerHTML=formHTML('a');
   $('#f-me').innerHTML=formHTML('b','나');$('#f-you').innerHTML=formHTML('c','상대');
-  const fa=initForm('a'),fb=initForm('b'),fc=initForm('c');
-  const saved=store.get('mg.form');if(saved){fa.set(saved);fb.set(saved);}
+  $('#f-wiz').innerHTML=formHTML('w');
+  const fa=initForm('a'),fb=initForm('b'),fc=initForm('c'),fw=initForm('w');
+  FORMS={a:fa,b:fb,c:fc,w:fw};WIZ.fs=[...$('#f-wiz').children];
+  const saved=store.get('mg.form');if(saved){fa.set(saved);fb.set(saved);fw.set(saved);}
   // 테마
   const th=store.get('mg.theme');if(th)document.documentElement.setAttribute('data-theme',th);
   $('#theme').addEventListener('click',()=>{const r=document.documentElement;const dark=r.getAttribute('data-theme')?r.getAttribute('data-theme')==='dark':!matchMedia('(prefers-color-scheme: light)').matches;const n=dark?'light':'dark';r.setAttribute('data-theme',n);store.set('mg.theme',n);});
   // 사주
-  $('#go').addEventListener('click',async()=>{
-    const inp=fa.get();
-    try{computeChart(inp);}catch(e){toast(e.message);return;}
-    store.set('mg.form',inp);
-    await cinematic(['태어난 해의 입춘을 헤아립니다','절기의 순간을 계산합니다','일진의 간지를 찾습니다','여덟 글자를 펼칩니다']);
-    try{render(inp);}catch(e){toast(e.message||'계산 중 문제가 생겼어요.');console.error(e);return;}
-    scrollTo({top:0});playStory(CUR);
-  });
+  $('#go').addEventListener('click',()=>runReading(fa.get()));
   // 궁합
   $('#go-m').addEventListener('click',async()=>{
     const a=fb.get(),b=fc.get();let A,B2;
@@ -1335,6 +1355,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     out.hidden=false;countUp(out);setTimeout(()=>out.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'}),150);
   });
   yiInit();initDaily();initFaq();bindStory();
+  $('#open-pro').addEventListener('click',startPrologue);
+  let seen=false;try{seen=!!sessionStorage.getItem('mg.pro');}catch(e){}
+  if(!saved&&!seen&&(!location.hash||location.hash==='#saju'))setTimeout(startPrologue,350);
   // 라우팅
   const views=['saju','yi','match'];
   function route(){const h=(location.hash||'#saju').slice(1);const v=views.includes(h)?h:(h.startsWith('s-')?'saju':'saju');
@@ -1550,11 +1573,12 @@ function typeText(el,text){
 function finishTyping(){const t=ST.typing;if(!t)return false;clearTimeout(t.id);t.el.textContent=t.text;t.el.classList.remove('typing');ST.typing=null;return true;}
 function showScene(i){
   ST.i=i;const s=ST.sc[i];ST.el=0;ST.last=performance.now();ST.paused=false;
+  $('#story').className='story '+(s.theme||ST.theme)+(s.ui?' ui':'');
   $$('#st-prog i').forEach((b,k)=>{b.style.transform=k<i?'scaleX(1)':'scaleX(0)';});
   $('#st-ch').textContent=`${i+1}/${ST.sc.length} · ${s.t}`;
-  const stage=$('#st-stage');stage.scrollTop=0;stage.innerHTML=`<div class="scn">${s.html}</div>`;
+  const stage=$('#st-stage');stage.scrollTop=0;stage.innerHTML=`<div class="scn">${s.html}</div>`;if(s.mount)s.mount($('.scn',stage));
   $('#st-tease').textContent=s.tease||'';
-  fxStart(s.fx||'stars');bell(i);try{navigator.vibrate&&navigator.vibrate(8);}catch(e){}
+  fxStart(s.fx||'stars');bell(i);try{if(navigator.vibrate&&navigator.userActivation&&navigator.userActivation.hasBeenActive)navigator.vibrate(8);}catch(e){}
   const nar=$('.nar',stage);if(nar&&s.nar)typeText(nar,s.nar);
   ST.dur=(s.nar?Math.min(4600,s.nar.length*34)+3200:3600);
   countUp(stage);
@@ -1568,12 +1592,66 @@ function stLoop(t){
   if(k>=1&&!ST.sc[ST.i].end&&!ST.typing)stNext();
   ST.raf=requestAnimationFrame(stLoop);
 }
-function playStory(C){
-  if(!C)return;ST.C=C;ST.sc=storyScenes(C);ST.open=true;
-  const root=$('#story');root.className='story '+ec(C.an.dEl);root.hidden=false;document.body.classList.add('st-open');
-  $('#st-prog').innerHTML=ST.sc.map(()=>'<b><i></i></b>').join('');
+function playScenes(sc,theme){
+  ST.sc=sc;ST.theme=theme;ST.open=true;
+  const root=$('#story');root.hidden=false;document.body.classList.add('st-open');
+  $('#st-prog').innerHTML=sc.map(()=>'<b><i></i></b>').join('');
   if(snd.on&&snd.ctx){snd.ctx.resume();startDrone();}
   showScene(0);cancelAnimationFrame(ST.raf);ST.raf=requestAnimationFrame(stLoop);
+}
+function playStory(C){if(!C)return;ST.C=C;playScenes(storyScenes(C),ec(C.an.dEl));}
+
+/* ---------- 프롤로그 + 질문 위저드 (입력 전에 먼저 이야기로 시작) ---------- */
+const WIZ={fs:[]};
+const EL_DESC=['새싹이 돋아나는','불이 타오르는','땅이 단단해지는','칼날이 서는','물이 깊어지는'];
+function wizMount(idx){return el=>{const slot=$('.wslot',el);idx.forEach(i=>slot.appendChild(WIZ.fs[i]));};}
+function prologueScenes(){
+  const k=new Date(Date.now()+9*3600000);
+  const sky=computeChart({y:k.getUTCFullYear(),m:k.getUTCMonth()+1,d:k.getUTCDate(),hh:k.getUTCHours(),mm:k.getUTCMinutes(),hourKnown:true,gender:'M',cal:'solar',solarCorr:false,zasi:'night'});
+  const P=sky.pillars,yp=yearPillarOf(Date.now()),yEl=sEl(yp.s);
+  const col=(kk,i)=>`<div class="pcol" style="--i:${i}"><div class="plabel"><b>${PLAB[kk]}주</b></div>${stemTile(P[kk].s,'')}${branchTile(P[kk].b)}</div>`;
+  const demo={el:[1.6,1.6,1.6,1.6,1.6],total:8,dEl:-1,yongEl:-1};
+  const wkNav=(prev,nextAct,nextTxt)=>`<div class="wnav">${prev?'<button class="btn ghost" data-act="wprev">이전</button>':''}<button class="btn" data-act="${nextAct}">${nextTxt}</button></div>`;
+  const cards=[['性','타고난 성격'],['才','숨은 재능'],['財','재물의 그릇'],['緣','인연의 결'],['運','올해의 흐름'],['時','인생의 계절']];
+  return [
+   {t:'프롤로그',theme:'e4',fx:'stars',tease:'탭하면 다음 이야기 ›',
+    html:`<p class="kick">먼저 질문 하나만요</p><h2 class="bigdate">같은 해에 태어났는데<br>왜 인생은 이렇게 다를까요?</h2><div class="orrery pro-orr">${orreryHTML({id:'p'})}</div><p class="nar"></p>`,
+    nar:'옛 사람들은 그 답을 하늘의 움직임에서 찾았어요.'},
+   {t:'지금 이 순간의 하늘',theme:'e3',fx:'spark',tease:'다음 · 그 글자가 말해 주는 것',
+    html:`<p class="kick">지금 이 순간의 하늘</p><div class="sp">${['h','d','m','y'].map(col).join('')}</div><p class="nar"></p>`,
+    nar:`${gz(P.y)}년 ${gz(P.m)}월 ${gz(P.d)}일 ${gz(P.h)}시. 이 여덟 글자는 지금 이 순간에만 만들어져요. 두 시간만 지나도 같은 글자는 다시 오지 않아요.`},
+   {t:'다섯 기운',theme:'e0',fx:'leaf',tease:'다음 · 올해의 하늘',
+    html:`<p class="kick">다섯 기운</p>${pentagonHTML(demo)}<p class="nar"></p>`,
+    nar:'나무, 불, 흙, 쇠, 물. 사주는 이 다섯 기운이 서로 살리고 누르며 만드는 이야기예요. 내 안에서 가장 센 기운은 무엇일까요?'},
+   {t:'올해의 하늘',theme:ec(yEl),fx:['leaf','ember','dust','spark','rain'][yEl],tease:'다음 · 당신이 알게 될 이야기',
+    html:`<p class="kick">${new Date(Date.now()+9*3600000).getUTCFullYear()}년의 하늘</p><div class="ilju-big ${ec(yEl)}"><span>${S[yp.s]}</span><span>${B[yp.b]}</span></div><h3 class="tag-h">${gz(yp)}년 · ${ANI[yp.b]}띠 해</h3><p class="nar"></p>`,
+    nar:`올해는 ${EL_DESC[yEl]} 한 해예요. 누군가에게는 기회가, 누군가에게는 시험이 되는 흐름이죠. 당신에게는 어느 쪽일까요?`},
+   {t:'곧 알게 될 이야기',theme:'e2',fx:'stars',tease:'다음 · 시작하기',
+    html:`<p class="kick">태어난 순간만 알려 주세요</p><div class="peek">${cards.map(([h,t],i)=>`<div style="--d:${i*110}ms"><b>${h}</b><span>${t}</span></div>`).join('')}</div><p class="nar"></p>`,
+    nar:'성격, 재능, 재물, 인연, 올해의 흐름까지. 12장의 이야기로 차근차근 들려 드릴게요.'},
+   {t:'시작',theme:'e4',fx:'stars',end:true,tease:'',
+    html:`<p class="kick">준비됐나요?</p><h2 class="bigdate">생년월일만 있으면 돼요</h2><p class="nar"></p><div class="acts"><button class="btn" data-act="next">내 하늘 읽기 시작</button><button class="btn ghost" data-act="skip">바로 입력할래요</button></div>`,
+    nar:'질문은 딱 세 가지예요. 태어난 시간까지 알면 더 깊이 읽을 수 있고, 모르면 건너뛰어도 괜찮아요. 입력한 정보는 이 기기에만 남아요.'},
+   {t:'이름과 성별',theme:'e4',fx:'stars',end:true,ui:true,tease:'',
+    html:`<p class="kick">첫 번째 질문</p><p class="nar"></p><div class="wslot wiz"></div>${wkNav(true,'wnext','다음')}`,
+    nar:'먼저, 어떻게 불러 드리면 될까요? 성별은 대운이 흐르는 방향을 정하는 데 쓰여요.',mount:wizMount([0,1])},
+   {t:'생년월일',theme:'e0',fx:'leaf',end:true,ui:true,tease:'',
+    html:`<p class="kick">두 번째 질문</p><p class="nar"></p><div class="wslot wiz"></div>${wkNav(true,'wnext','다음')}`,
+    nar:'언제 태어나셨나요? 음력으로 알고 있다면 달력을 바꿔 주세요.',mount:wizMount([2,3]),
+    check:()=>{try{computeChart(FORMS.w.get());}catch(e){return e.message;}return '';}},
+   {t:'태어난 시간',theme:'e1',fx:'ember',end:true,ui:true,tease:'',
+    html:`<p class="kick">마지막 질문</p><p class="nar"></p><div class="wslot wiz"></div>${wkNav(true,'wfinish','내 사주 읽기')}`,
+    nar:'태어난 시간을 알고 있나요? 모르면 체크만 해 주세요.',mount:wizMount([4,5])}
+  ];
+}
+function startPrologue(){try{sessionStorage.setItem('mg.pro','1');}catch(e){}playScenes(prologueScenes(),'e4');}
+function wizGo(a){
+  const s=ST.sc[ST.i];
+  if(a==='next')showScene(ST.i+1);
+  else if(a==='skip')closeStory(true);
+  else if(a==='wprev')showScene(ST.i-1);
+  else if(a==='wnext'){const m=s.check?s.check():'';if(m){toast(m);return;}showScene(ST.i+1);}
+  else if(a==='wfinish'){const inp=FORMS.w.get();try{computeChart(inp);}catch(e){toast(e.message);return;}FORMS.a.set(inp);closeStory(false);runReading(inp);}
 }
 function closeStory(go){
   ST.open=false;cancelAnimationFrame(ST.raf);finishTyping();fxStop();stopDrone();
@@ -1589,9 +1667,9 @@ function bindStory(){
   zone('#st-l',-1);zone('#st-r',1);
   $('#st-x').onclick=()=>closeStory(true);
   $('#st-stage').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
-    if(a==='full')closeStory(true);else if(a==='again')showScene(0);else if(a==='match'){closeStory(false);location.hash='match';}else if(a==='yi'){closeStory(false);location.hash='yi';}});
+    if(a==='full')closeStory(true);else if(a==='again')showScene(0);else if(a==='match'){closeStory(false);location.hash='match';}else if(a==='yi'){closeStory(false);location.hash='yi';}else wizGo(a);});
   $$('.snd-btn').forEach(b=>b.addEventListener('click',()=>sndSetup(!snd.on)));
-  document.addEventListener('keydown',e=>{if(!ST.open)return;if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();stNext();}else if(e.key==='ArrowLeft')stPrev();else if(e.key==='Escape')closeStory(true);});
+  document.addEventListener('keydown',e=>{if(!ST.open||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();stNext();}else if(e.key==='ArrowLeft')stPrev();else if(e.key==='Escape')closeStory(true);});
   document.addEventListener('visibilitychange',()=>{if(ST.open)ST.paused=document.hidden;});
   snd.on=false;sndSetup(false);
 }
